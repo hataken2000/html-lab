@@ -55,6 +55,22 @@
       cursor: pointer;
     }
     .swatch.active { border-color: #fff; }
+    #materials {
+      display: flex;
+      gap: 4px;
+      margin: 6px 0;
+      flex-wrap: wrap;
+    }
+    .mat-btn {
+      background: #2a2a2a;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: #ccc;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    .mat-btn.active { border-color: #fff; background: #3a3a3a; color: #fff; }
     #stats {
       position: fixed;
       bottom: 1rem; left: 1rem;
@@ -69,12 +85,13 @@
 
   <div id="ui">
     <b>🌊 水槽シミュレーター</b><br>
-    クリック/ホールド：水を注ぐ<br>
-    ドラッグ：かき混ぜる<br>
+    クリック/ホールド：素材を注ぐ・置く<br>
+    ドラッグ：かき混ぜる（壁・消すはドラッグで連続配置）<br>
     キー入力：文字が落ちる（浮力は文字ごと）<br>
+    <div id="materials"></div>
     <div id="colors"></div>
     パーティクル上限：<span id="particle-val">2500</span><br>
-    <input id="particle-slider" type="range" min="100" max="5000" step="100" value="2500"><br>
+    <input id="particle-slider" type="range" min="100" max="10000" step="100" value="2500"><br>
     粒の大きさ：<span id="size-val">6</span><br>
     <input id="size-slider" type="range" min="2" max="20" step="1" value="6"><br>
     <b>Tab</b>：排水栓 開/閉　<b>Space</b>：シェイク<br>
@@ -112,6 +129,31 @@
     let drainOpen = false;
     let MAX_PARTICLES = 2500;
     let gravityFlip = false;
+
+    // ===== 素材定義 =====
+    // gScale: 重さ（重力倍率）, visc: 粘性（速度減衰）, w: 押されやすさ（0=不動）
+    const MATS = {
+      water: { label: '🌊 水',   gScale: 1.0, visc: 0.99, w: 1.0,  fluid: true },
+      oil:   { label: '🛢️ 油',   gScale: 0.55, visc: 0.92, w: 1.35, fluid: true,  color: '#c8a832' },
+      sand:  { label: '🏖️ 砂',   gScale: 1.7, visc: 0.75, w: 0.6,  fluid: false, color: '#d4b483' },
+      wall:  { label: '🧱 壁',   gScale: 0,   visc: 0,    w: 0,    fluid: false, color: '#8a8a8a' },
+      erase: { label: '🧹 消す' }
+    };
+    let currentMat = 'water';
+
+    // 素材ボタンUI
+    const matsDiv = document.getElementById('materials');
+    for (const key of Object.keys(MATS)) {
+      const b = document.createElement('button');
+      b.className = 'mat-btn' + (key === currentMat ? ' active' : '');
+      b.textContent = MATS[key].label;
+      b.onclick = () => {
+        currentMat = key;
+        document.querySelectorAll('.mat-btn').forEach(el => el.classList.remove('active'));
+        b.classList.add('active');
+      };
+      matsDiv.appendChild(b);
+    }
 
     // 色パレットUI
     const colorsDiv = document.getElementById('colors');
@@ -169,9 +211,27 @@
       return out;
     }
 
-    // ===== 水を注ぐ =====
+    // ===== 注ぐ・置く・消す =====
     function pour(x, y) {
+      if (currentMat === 'erase') {
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          if (Math.hypot(p.x - x, p.y - y) < 40) particles.splice(i, 1);
+        }
+        return;
+      }
       if (particles.length >= MAX_PARTICLES) return;
+      const mat = MATS[currentMat];
+      if (currentMat === 'wall') {
+        // 壁はグリッドに沿って固定配置（近くに既存の壁があればスキップ）
+        const gx = Math.round(x / (R * 1.6)) * (R * 1.6);
+        const gy = Math.round(y / (R * 1.6)) * (R * 1.6);
+        for (const p of particles) {
+          if (p.mat === 'wall' && Math.hypot(p.x - gx, p.y - gy) < R * 1.2) return;
+        }
+        particles.push({ x: gx, y: gy, px: gx, py: gy, vx: 0, vy: 0, mat: 'wall', color: mat.color });
+        return;
+      }
       for (let i = 0; i < 4; i++) {
         particles.push({
           x: x + (Math.random() - 0.5) * 12,
@@ -179,7 +239,8 @@
           px: x, py: y,
           vx: (Math.random() - 0.5) * 2,
           vy: Math.random() * 2,
-          color: currentColor
+          mat: currentMat,
+          color: mat.color || currentColor
         });
       }
     }
@@ -224,6 +285,7 @@
 
     function shake() {
       for (const p of particles) {
+        if (p.mat === 'wall') continue;
         p.vx += (Math.random() - 0.5) * 14;
         p.vy -= Math.random() * 8;
       }
@@ -243,11 +305,12 @@
         const mvx = mouse.x - mouse.px;
         const mvy = mouse.y - mouse.py;
         const speed = Math.hypot(mvx, mvy);
-        if (speed < 4) {
-          pour(mouse.x, mouse.y);   // ほぼ静止 → 注ぐ
+        if (currentMat === 'erase' || currentMat === 'wall' || speed < 4) {
+          pour(mouse.x, mouse.y);   // 注ぐ／置く／消す（壁と消しゴムはドラッグ中も有効）
         } else {
           // 動いてる → かき混ぜる
           for (const p of particles) {
+            if (p.mat === 'wall') continue;
             const dx = p.x - mouse.x, dy = p.y - mouse.y;
             const d = Math.hypot(dx, dy);
             if (d < 80) {
@@ -261,9 +324,10 @@
       mouse.px = mouse.x;
       mouse.py = mouse.y;
 
-      // 重力 & 予測位置
+      // 重力 & 予測位置（素材ごとの重さ）
       for (const p of particles) {
-        p.vy += g;
+        if (p.mat === 'wall') continue;
+        p.vy += g * MATS[p.mat].gScale;
         p.px = p.x; p.py = p.y;
         p.x += p.vx;
         p.y += p.vy;
@@ -291,23 +355,53 @@
         }
         const press = STIFF * (dens - REST);
         const pressNear = STIFF_NEAR * densNear;
+        const wp = MATS[p.mat].w;
         let dxAcc = 0, dyAcc = 0;
         for (const [j, nx, ny, q] of qs) {
           const o = particles[j];
-          const disp = (press * q + pressNear * q * q) * 0.5;
-          o.x += nx * disp;
-          o.y += ny * disp;
-          dxAcc -= nx * disp;
-          dyAcc -= ny * disp;
+          const wo = MATS[o.mat].w;
+          const tot = wp + wo;
+          if (tot === 0) continue;   // 壁同士は動かない
+          // 押されやすさで分配（軽い油は押されやすく浮き上がる、壁は不動）
+          const disp = press * q + pressNear * q * q;
+          o.x += nx * disp * (wo / tot);
+          o.y += ny * disp * (wo / tot);
+          dxAcc -= nx * disp * (wp / tot);
+          dyAcc -= ny * disp * (wp / tot);
+          // 密度差バイアス：重い素材は沈み、軽い素材は浮く（砂↓ 油↑）
+          if (wo > 0 && wp > 0) {
+            const db = (MATS[p.mat].gScale - MATS[o.mat].gScale) * 0.06 * q * (gravityFlip ? -1 : 1);
+            if (db !== 0) { dyAcc += db; o.y -= db; }
+          }
         }
         p.x += dxAcc;
         p.y += dyAcc;
+      }
+
+      // 壁ブロックとのハード衝突（すり抜け防止）
+      const wallMin = R * 1.5;
+      for (const p of particles) {
+        if (p.mat === 'wall') continue;
+        const nb = neighbors(p.x, p.y);
+        for (const j of nb) {
+          const o = particles[j];
+          if (o.mat !== 'wall') continue;
+          const dx = p.x - o.x, dy = p.y - o.y;
+          const d = Math.hypot(dx, dy);
+          if (d < wallMin && d > 0.001) {
+            // 壁の外側まで押し出す
+            const push = (wallMin - d) / d;
+            p.x += dx * push;
+            p.y += dy * push;
+          }
+        }
       }
 
       // 壁 & 排水
       const drainX1 = W / 2 - 40, drainX2 = W / 2 + 40;
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
+        if (p.mat === 'wall') { p.vx = 0; p.vy = 0; continue; }
         if (p.x < R) { p.x = R; }
         if (p.x > W - R) { p.x = W - R; }
         if (p.y < R) { p.y = R; }
@@ -318,9 +412,10 @@
             p.y = H - R;
           }
         }
-        // 速度更新（位置ベース）
-        p.vx = (p.x - p.px) * 0.99;
-        p.vy = (p.y - p.py) * 0.99;
+        // 速度更新（位置ベース、素材ごとの粘性）
+        const visc = MATS[p.mat].visc;
+        p.vx = (p.x - p.px) * visc;
+        p.vy = (p.y - p.py) * visc;
       }
 
       // ===== 文字の物理 =====
@@ -334,6 +429,15 @@
         for (const j of nb) {
           const o = particles[j];
           const d = Math.hypot(o.x - l.x, o.y - l.y);
+          if (o.mat === 'wall') {
+            // 壁は文字を弾く
+            if (d < l.size * 0.7 && d > 0.001) {
+              const f = (1 - d / (l.size * 0.7)) * 1.5;
+              l.vx += (l.x - o.x) / d * f;
+              l.vy += (l.y - o.y) / d * f;
+            }
+            continue;
+          }
           if (d < l.size) {
             wet++;
             flowX += o.vx;
@@ -374,9 +478,10 @@
     function render() {
       ctx.clearRect(0, 0, W, H);
 
-      // 水（メタボール風：ぼかし大円 → 上から本体）
+      // 流体（メタボール風グロー）
       ctx.globalCompositeOperation = 'lighter';
       for (const p of particles) {
+        if (!MATS[p.mat].fluid) continue;
         const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, R * 2.5);
         grad.addColorStop(0, p.color + 'aa');
         grad.addColorStop(1, p.color + '00');
@@ -386,6 +491,21 @@
         ctx.fill();
       }
       ctx.globalCompositeOperation = 'source-over';
+
+      // 砂（不透明の粒）と壁（四角ブロック）
+      for (const p of particles) {
+        if (p.mat === 'sand') {
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, R * 0.8, 0, 7);
+          ctx.fill();
+        } else if (p.mat === 'wall') {
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x - R, p.y - R, R * 2, R * 2);
+          ctx.strokeStyle = '#555';
+          ctx.strokeRect(p.x - R, p.y - R, R * 2, R * 2);
+        }
+      }
 
       // 文字
       ctx.textAlign = 'center';
