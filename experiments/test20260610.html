@@ -37,6 +37,11 @@
       max-width: 230px;
     }
     #ui b { color: #fff; }
+    #particle-slider, #size-slider {
+      width: 100%;
+      margin: 4px 0 2px;
+      accent-color: #4fc3f7;
+    }
     #colors {
       display: flex;
       gap: 6px;
@@ -68,6 +73,10 @@
     ドラッグ：かき混ぜる<br>
     キー入力：文字が落ちる（浮力は文字ごと）<br>
     <div id="colors"></div>
+    パーティクル上限：<span id="particle-val">2500</span><br>
+    <input id="particle-slider" type="range" min="100" max="5000" step="100" value="2500"><br>
+    粒の大きさ：<span id="size-val">6</span><br>
+    <input id="size-slider" type="range" min="2" max="20" step="1" value="6"><br>
     <b>Tab</b>：排水栓 開/閉　<b>Space</b>：シェイク<br>
     <b>↑</b>：重力反転　<b>Delete</b>：全消去
   </div>
@@ -87,9 +96,8 @@
     addEventListener('resize', resize);
 
     // ===== 設定 =====
-    const R = 6;             // パーティクル半径
-    const H_SMOOTH = R * 3;  // 相互作用半径
-    const MAX_PARTICLES = 2500;
+    let R = 6;               // パーティクル半径
+    let H_SMOOTH = R * 3;   // 相互作用半径
     const STIFF = 0.35;      // 圧力の強さ
     const STIFF_NEAR = 0.6;
     const REST = 2.2;        // 静止密度
@@ -102,6 +110,7 @@
     let mouse = { x: 0, y: 0, px: 0, py: 0, down: false };
     let currentColor = COLORS[0];
     let drainOpen = false;
+    let MAX_PARTICLES = 2500;
     let gravityFlip = false;
 
     // 色パレットUI
@@ -116,6 +125,24 @@
         s.classList.add('active');
       };
       colorsDiv.appendChild(s);
+    });
+
+    // スライダー
+    const sizeSlider = document.getElementById('size-slider');
+    const sizeVal = document.getElementById('size-val');
+    sizeSlider.addEventListener('input', () => {
+      R = parseInt(sizeSlider.value);
+      H_SMOOTH = R * 3;
+      sizeVal.textContent = R;
+    });
+
+    const slider = document.getElementById('particle-slider');
+    const sliderVal = document.getElementById('particle-val');
+    slider.addEventListener('input', () => {
+      MAX_PARTICLES = parseInt(slider.value);
+      sliderVal.textContent = MAX_PARTICLES;
+      // 超過分を削除
+      if (particles.length > MAX_PARTICLES) particles.splice(MAX_PARTICLES);
     });
 
     // ===== 空間ハッシュ =====
