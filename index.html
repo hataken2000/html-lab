@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTML Lab</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 1.2rem;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .card:hover {
+      border-color: #555;
+      transform: translateY(-2px);
+    }
+    .card-title {
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      color: #fff;
+    }
+    .card-desc {
+      font-size: 0.8rem;
+      color: #666;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: #2a2a2a;
+      color: #888;
+      margin-top: 0.6rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 HTML Lab</h1>
+  <p class="subtitle">ハタケの実験場 — 新しいやつは experiments/ に追加してく</p>
+
+  <div class="grid" id="list">
+    <!-- experiments/xxx.html を追加したらここにカードを足す -->
+    <a class="card" href="experiments/test20260610.html">
+      <div class="card-title">🌊 水槽シミュレーター</div>
+      <div class="card-desc">流体パーティクル。水を注ぐ・かき混ぜる・文字が浮き沈み</div>
+      <span class="badge">physics</span>
+    </a>
+    <a class="card" href="experiments/sample.html">
+      <div class="card-title">Sample</div>
+      <div class="card-desc">下地サンプル。コピーして使う</div>
+      <span class="badge">template</span>
+    </a>
+  </div>
+</body>
+</html>
